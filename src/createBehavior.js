@@ -3,6 +3,14 @@ import isBreakpoint from '@area17/a17-helpers/src/isBreakpoint';
 import manageBehaviors from './manageBehaviors';
 
 /**
+ * Behavior
+ * @typedef {Object.<string, any>|Lifecycle|Def} BehaviorInstance
+ * @property {HTMLElement} $node - Dom node associated to the behavior
+ * @property {string} name - Name of the behavior
+ * @property {Object} options
+ */
+
+/**
  * Behavior lifecycle
  * @typedef {Object} Lifecycle
  * @property {function} [init] - Init function called when behavior is created
@@ -16,8 +24,13 @@ import manageBehaviors from './manageBehaviors';
  */
 
 /**
+ * Behavior definition
+ * @typedef {Object.<string, function>} Def
+ */
+
+/**
  * A Behavior
- * @param {Element} node - A DOM element
+ * @param {HTMLElement} node - A DOM element
  * @param config
  * @returns {Behavior}
  * @constructor
@@ -37,11 +50,12 @@ function Behavior(node, config = {}) {
   this.__isEnabled = false;
   this.__children = config.children;
   this.__breakpoints = config.breakpoints;
-
-  // Auto-bind all custom methods to "this"
-  this.customMethodNames.forEach(methodName => {
-    this[methodName] = this[methodName].bind(this);
-  });
+  // this.customMethodNames = []
+  //
+  // // Auto-bind all custom methods to "this"
+  // this.customMethodNames.forEach(methodName => {
+  //   this[methodName] = this[methodName].bind(this);
+  // });
 
   this._binds = {};
   this._data = new Proxy(this._binds, {
@@ -53,14 +67,14 @@ function Behavior(node, config = {}) {
   });
 
   this.__isIntersecting = false;
-  this.__intersectionObserver;
+  this.__intersectionObserver = null;
 
   return this;
 }
 
 /**
  *
- * @type {Lifecycle}
+ * @type {Behavior|Lifecycle}
  */
 Behavior.prototype = Object.freeze({
   updateBinds(key, value) {
@@ -161,7 +175,7 @@ Behavior.prototype = Object.freeze({
   /**
    * Look for a child of the behavior: data-behaviorName-childName
    * @param {string} childName
-   * @param {Element} context - Define the ancestor where search begin, default is current node
+   * @param {HTMLElement} context - Define the ancestor where search begin, default is current node
    * @param {boolean} multi - Define usage between querySelectorAll and querySelector
    * @returns {HTMLElement|null}
    */
@@ -179,7 +193,7 @@ Behavior.prototype = Object.freeze({
   /**
    * Look for children of the behavior: data-behaviorName-childName
    * @param {string} childName
-   * @param {Element} context - Define the ancestor where search begin, default is current node
+   * @param {HTMLElement} context - Define the ancestor where search begin, default is current node
    * @returns {HTMLElement|null}
    */
   getChildren(childName, context) {
@@ -209,6 +223,11 @@ Behavior.prototype = Object.freeze({
       mb.initBehavior(SubBehavior.prototype.behaviorName, node, config);
     }
   },
+  /**
+   * Check if breakpoint passed in param is the current one
+   * @param {string} bp - Breakpoint to check
+   * @returns {boolean}
+   */
   isBreakpoint(bp) {
     return isBreakpoint(bp, this.__breakpoints);
   },
@@ -260,16 +279,17 @@ Behavior.prototype = Object.freeze({
 /**
  * Create a behavior instance
  * @param {string} name - Name of the behavior used for declaration: data-behavior="name"
- * @param {Object.<string, function>} def - define methods of the behavior
+ * @param {Def} def - define methods of the behavior
  * @param {Lifecycle} lifecycle - Register behavior lifecycle
- * @returns {function|{value: *, writable: boolean}}
+ * @returns {BehaviorInstance}
  */
 const createBehavior = (name, def, lifecycle = {}) => {
   const fn = function(...args) {
+    console.log(Behavior.apply(this, args))
     Behavior.apply(this, args);
   };
 
-  const customMethodNames = [];
+  console.log('fn', fn)
 
   const customProperties = {
     name: {
@@ -283,21 +303,19 @@ const createBehavior = (name, def, lifecycle = {}) => {
     },
     lifecycle: {
       value: lifecycle,
-    },
-    customMethodNames: {
-      value: customMethodNames,
-    },
+    }
   };
 
   // Expose the definition properties as 'this[methodName]'
   const defKeys = Object.keys(def);
   defKeys.forEach(key => {
-    customMethodNames.push(key);
     customProperties[key] = {
-      value: def[key],
+      value: def[key].bind(fn),
       writable: true,
     };
   });
+
+  console.log('customProperties', customProperties)
 
   fn.prototype = Object.create(Behavior.prototype, customProperties);
   return fn;
